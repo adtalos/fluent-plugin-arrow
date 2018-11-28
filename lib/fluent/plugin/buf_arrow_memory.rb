@@ -23,6 +23,8 @@ module Fluent
       Plugin.register_buffer('arrow_memory', self)
 
       config_param :schema, :array
+      config_param :arrow_format, :enum, list: [:arrow, :parquet], default: :arrow
+      config_param :row_group_chunk_size, :integer, default: 1024
 
       attr_reader :arrow_schema
 
@@ -42,7 +44,7 @@ module Fluent
       end
 
       def generate_chunk(metadata)
-        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema)
+        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format)
       end
 
       private

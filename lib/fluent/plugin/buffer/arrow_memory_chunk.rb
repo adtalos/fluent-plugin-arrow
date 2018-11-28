@@ -14,6 +14,7 @@
 # limitations under the License.
 
 require 'arrow'
+require 'parquet'
 require 'fluent/plugin/buffer/chunk'
 require 'fluent/plugin/buffer/memory_chunk'
 
@@ -21,9 +22,11 @@ module Fluent
   module Plugin
     class Buffer
       class ArrowMemoryChunk < MemoryChunk
-        def initialize(metadata, schema)
+        def initialize(metadata, schema, chunk_size: 1024, format: :arrow)
           super(metadata, compress: :text)
           @schema = schema
+          @chunk_size = chunk_size
+          @format = format
           @array_builders = {}
           @schema.fields.each do |f|
             @array_builders[f.name] = field_to_array_builder(f)
@@ -77,9 +80,19 @@ module Fluent
           arrow_buf = Arrow::ResizableBuffer.new(@chunk_bytes * 1.2)
 
           Arrow::BufferOutputStream.open(arrow_buf) do |output|
-            Arrow::RecordBatchFileWriter.open(output, @schema) do |writer|
-              record_batch = Arrow::RecordBatch.new(@schema, count, @array_builders.values.map(&:finish))
-              writer.write_record_batch(record_batch)
+            if @format == :parquet
+              Parquet::ArrowFileWriter.open(@schema, output) do |writer|
+                columns = @schema.fields.map do |f|
+                  Arrow::Column.new(f, @array_builders[f.name].finish)
+                end
+                table = Arrow::Table.new(@schema, columns)
+                writer.write_table(table, @chunk_size)
+              end
+            else
+              Arrow::RecordBatchFileWriter.open(output, @schema) do |writer|
+                record_batch = Arrow::RecordBatch.new(@schema, count, @array_builders.values.map(&:finish))
+                writer.write_record_batch(record_batch)
+              end
             end
           end
 
