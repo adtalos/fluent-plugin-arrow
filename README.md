@@ -1,8 +1,13 @@
 # fluent-plugin-arrow
 
-[Fluentd](https://fluentd.org/) formatter plugin to do something.
+[Fluentd](https://fluentd.org/) buffer plugin to output Apache Arrow and Parquet format.
 
-TODO: write description for you plugin.
+## Prerequisite
+
+- [Apache Arrow c++](https://github.com/apache/arrow/tree/master/cpp) (with -DARROW_PARQUET=ON)
+- [Apache Arrow c_glib](https://github.com/apache/arrow/tree/master/c_glib)
+- [red-arrow](https://github.com/apache/arrow/tree/master/ruby/red-arrow)
+- [red-parquet](https://github.com/apache/arrow/tree/master/ruby/red-parquet)
 
 ## Installation
 
@@ -31,7 +36,31 @@ $ bundle
 You can generate configuration template:
 
 ```
-$ fluent-plugin-config-format formatter arrow
+<match arrow>
+  @type file
+
+  path arrow_test
+
+  <buffer>
+    @type arrow_memory
+    arrow_format arrow # or parquet
+
+    schema [
+      {"name": "key1", "type": "string"},
+      {"name": "key2", "type": "uint64"},
+      {"name": "key3", "type": "timestamp", "unit": "milli"},
+      {"name": "key4", "type": "list", "value_type": {"name": "value", "type": "uint64"}},
+      {"name": "key5", "type": "struct", "fields": [
+        {"name": "bar1", "type": "uint64"},
+        {"name": "bar2", "type": "list", "value_type": {"name": "value", "type": "string"}}
+      ]}
+    ]
+  </buffer>
+
+  <format>
+    @type arrow
+  </format>
+</match>
 ```
 
 You can copy and paste generated documents here.
