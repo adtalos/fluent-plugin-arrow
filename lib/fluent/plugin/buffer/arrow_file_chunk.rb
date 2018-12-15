@@ -17,18 +17,18 @@ require 'arrow'
 require 'parquet'
 require 'fluent/msgpack_factory'
 require 'fluent/plugin/buffer/chunk'
-require 'fluent/plugin/buffer/memory_chunk'
+require 'fluent/plugin/buffer/file_chunk'
 require 'fluent/plugin/buffer/arrow_buffer_string_builder'
 require 'fluent/plugin/arrow/field_wrapper'
 
 module Fluent
   module Plugin
     class Buffer
-      class ArrowMemoryChunk < MemoryChunk
+      class ArrowFileChunk < FileChunk
         include ArrowBufferStringBuilder
 
-        def initialize(metadata, schema, field_wrappers, chunk_size: 1024, format: :arrow)
-          super(metadata, compress: :text)
+        def initialize(metadata, path, mode, schema, field_wrappers, perm: system_config.file_permission || FILE_PERMISSION, chunk_size: 1024, format: :arrow)
+          super(metadata, path, mode, perm: perm, compress: :text)
           @schema = schema
           @field_wrappers = field_wrappers
           @chunk_size = chunk_size
@@ -36,22 +36,26 @@ module Fluent
         end
 
         def read(**kwargs)
+          @chunk.seek(0, IO::SEEK_SET)
           build_arrow_buffer_string
         end
 
         def open(**kwargs, &block)
-          StringIO.open(build_arrow_buffer_string, &block)
+          @chunk.seek(0, IO::SEEK_SET)
+          val = StringIO.open(build_arrow_buffer_string, &block)
+          @chunk.seek(0, IO::SEEK_END) if self.staged?
+          val
         end
 
         def write_to(io, **kwargs)
-          # re-implementation to optimize not to create StringIO
+          @chunk.seek(0, IO::SEEK_SET)
           io.write build_arrow_buffer_string
         end
 
         private
 
         def each_record(&block)
-          Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(@chunk, &block)
+          Fluent::MessagePackFactory.engine_factory.unpacker(@chunk).each(&block)
         end
       end
     end
