@@ -19,7 +19,6 @@ require 'fluent/msgpack_factory'
 require 'fluent/plugin/buffer/chunk'
 require 'fluent/plugin/buffer/file_chunk'
 require 'fluent/plugin/buffer/arrow_buffer_string_builder'
-require 'fluent/plugin/arrow/field_wrapper'
 
 module Fluent
   module Plugin
@@ -27,10 +26,9 @@ module Fluent
       class ArrowFileChunk < FileChunk
         include ArrowBufferStringBuilder
 
-        def initialize(metadata, path, mode, schema, field_wrappers, perm: system_config.file_permission || FILE_PERMISSION, chunk_size: 1024, format: :arrow)
+        def initialize(metadata, path, mode, schema, perm: system_config.file_permission || FILE_PERMISSION, chunk_size: 1024, format: :arrow)
           super(metadata, path, mode, perm: perm, compress: :text)
           @schema = schema
-          @field_wrappers = field_wrappers
           @chunk_size = chunk_size
           @format = format
         end

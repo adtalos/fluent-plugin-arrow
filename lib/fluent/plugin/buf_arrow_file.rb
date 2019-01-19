@@ -17,7 +17,6 @@
 require "arrow"
 require 'fluent/plugin/buf_file'
 require 'fluent/plugin/buffer/arrow_file_chunk'
-require 'fluent/plugin/arrow/field_wrapper'
 
 module Fluent
   module Plugin
@@ -34,11 +33,7 @@ module Fluent
         super
 
         # [{"name" => foo1, "type" => "uint64"}, {"name" => foo2, "type" => "struct", "fields" => [{"name" => bar1, "type" => "string"}]}
-        @field_wrappers = @schema.each_with_object({}) do |field, h|
-          h[field["name"]] = Fluent::Plugin::Arrow::FieldWrapper.build(field)
-        end
-
-        @arrow_schema = ::Arrow::Schema.new(@field_wrappers.values.map(&:arrow_field))
+        @arrow_schema = ::Arrow::Schema.new(@schema)
       end
 
       def resume
@@ -48,9 +43,9 @@ module Fluent
       def generate_chunk(metadata)
         # FileChunk generates real path with unique_id
         if @file_permission
-          chunk = Fluent::Plugin::Buffer::ArrowFileChunk.new(metadata, @path, :create, @arrow_schema, @field_wrappers, perm: @file_permission, chunk_size: @row_group_chunk_size, format: @arrow_format)
+          chunk = Fluent::Plugin::Buffer::ArrowFileChunk.new(metadata, @path, :create, @arrow_schema, perm: @file_permission, chunk_size: @row_group_chunk_size, format: @arrow_format)
         else
-          chunk = Fluent::Plugin::Buffer::ArrowFileChunk.new(metadata, @path, :create, @arrow_schema, @field_wrappers, chunk_size: @row_group_chunk_size, format: @arrow_format)
+          chunk = Fluent::Plugin::Buffer::ArrowFileChunk.new(metadata, @path, :create, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format)
         end
 
         log.debug "Created new chunk", chunk_id: dump_unique_id_hex(chunk.unique_id), metadata: metadata

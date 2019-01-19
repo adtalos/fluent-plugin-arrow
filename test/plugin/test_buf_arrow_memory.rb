@@ -25,8 +25,8 @@ class ArrowMemoryBufferTest < Test::Unit::TestCase
         {"name": "foo1", "type": "uint64"},
         {"name": "foo2", "type": "string"},
         {"name": "foo3", "type": "timestamp", "unit": "milli"},
-        {"name": "foo4", "type": "list", "value_type": {"name": "value", "type": "uint64"}},
-        {"name": "foo5", "type": "struct", "fields": [{"name": "bar1", "type": "uint64"}, {"name": "bar2", "type": "list", "value_type": {"name": "value", "type": "string"}}]}
+        {"name": "foo4", "type": "list", "field": {"name": "value", "type": "uint64"}},
+        {"name": "foo5", "type": "struct", "fields": [{"name": "bar1", "type": "uint64"}, {"name": "bar2", "type": "list", "field": {"name": "value", "type": "string"}}]}
       ]
     ]
     buffer_conf = Fluent::Config.parse(conf, "(test)", "(test_dir)", syntax: :v1)
