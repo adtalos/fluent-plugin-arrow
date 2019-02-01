@@ -49,10 +49,10 @@ You can generate configuration template:
       {"name": "key1", "type": "string"},
       {"name": "key2", "type": "uint64"},
       {"name": "key3", "type": "timestamp", "unit": "milli"},
-      {"name": "key4", "type": "list", "value_type": {"name": "value", "type": "uint64"}},
+      {"name": "key4", "type": "list", "field": {"name": "value", "type": "uint64"}},
       {"name": "key5", "type": "struct", "fields": [
         {"name": "bar1", "type": "uint64"},
-        {"name": "bar2", "type": "list", "value_type": {"name": "value", "type": "string"}}
+        {"name": "bar2", "type": "list", "field": {"name": "value", "type": "string"}}
       ]}
     ]
   </buffer>

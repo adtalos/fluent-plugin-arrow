@@ -1,0 +1,10 @@
+sudo: required
+
+services:
+  - docker
+
+install:
+  - docker build -t joker1007/fluent-plugin-arrow .
+
+script:
+  - docker run joker1007/fluent-plugin-arrow /bin/sh -c "bundle exec rake"

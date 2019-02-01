@@ -9,13 +9,8 @@ class ArrowMemoryChunkTest < Test::Unit::TestCase
       ::Arrow::Field.new("key2", :double),
       ::Arrow::Field.new("key3", ::Arrow::TimestampDataType.new(:second)),
     ]
-    field_wrappers = {
-      "key1" => Fluent::Plugin::Arrow::FieldWrapper.build({"name" => "key1", "type" => "uint64"}),
-      "key2" => Fluent::Plugin::Arrow::FieldWrapper.build({"name" => "key1", "type" => "double"}),
-      "key3" => Fluent::Plugin::Arrow::FieldWrapper.build({"name" => "key1", "type" => "timestamp", "unit" => "second"}),
-    }
     @schema = Arrow::Schema.new(@fields)
-    @c = Fluent::Plugin::Buffer::ArrowMemoryChunk.new(Object.new, @schema, field_wrappers)
+    @c = Fluent::Plugin::Buffer::ArrowMemoryChunk.new(Object.new, @schema)
   end
 
   test "can #read" do

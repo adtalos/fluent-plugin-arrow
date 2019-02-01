@@ -16,7 +16,6 @@
 require "arrow"
 require 'fluent/plugin/buffer'
 require 'fluent/plugin/buffer/arrow_memory_chunk'
-require 'fluent/plugin/arrow/field_wrapper'
 
 module Fluent
   module Plugin
@@ -33,11 +32,7 @@ module Fluent
         super
 
         # [{"name" => foo1, "type" => "uint64"}, {"name" => foo2, "type" => "struct", "fields" => [{"name" => bar1, "type" => "string"}]}
-        @field_wrappers = @schema.each_with_object({}) do |field, h|
-          h[field["name"]] = Fluent::Plugin::Arrow::FieldWrapper.build(field)
-        end
-
-        @arrow_schema = ::Arrow::Schema.new(@field_wrappers.values.map(&:arrow_field))
+        @arrow_schema = ::Arrow::Schema.new(@schema)
       end
 
       def resume
@@ -45,7 +40,7 @@ module Fluent
       end
 
       def generate_chunk(metadata)
-        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, @field_wrappers, chunk_size: @row_group_chunk_size, format: @arrow_format)
+        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format)
       end
     end
   end

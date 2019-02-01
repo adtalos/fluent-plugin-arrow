@@ -19,7 +19,6 @@ require 'fluent/msgpack_factory'
 require 'fluent/plugin/buffer/chunk'
 require 'fluent/plugin/buffer/memory_chunk'
 require 'fluent/plugin/buffer/arrow_buffer_string_builder'
-require 'fluent/plugin/arrow/field_wrapper'
 
 module Fluent
   module Plugin
@@ -27,10 +26,9 @@ module Fluent
       class ArrowMemoryChunk < MemoryChunk
         include ArrowBufferStringBuilder
 
-        def initialize(metadata, schema, field_wrappers, chunk_size: 1024, format: :arrow)
+        def initialize(metadata, schema, chunk_size: 1024, format: :arrow)
           super(metadata, compress: :text)
           @schema = schema
-          @field_wrappers = field_wrappers
           @chunk_size = chunk_size
           @format = format
         end
