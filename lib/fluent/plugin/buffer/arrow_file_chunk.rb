@@ -26,7 +26,7 @@ module Fluent
       class ArrowFileChunk < FileChunk
         include ArrowBufferStringBuilder
 
-        def initialize(metadata, path, mode, schema, perm: system_config.file_permission || FILE_PERMISSION, chunk_size: 1024, format: :arrow)
+        def initialize(metadata, path, mode, schema, perm: nil, chunk_size: 1024, format: :arrow)
           super(metadata, path, mode, perm: perm, compress: :text)
           @schema = schema
           @chunk_size = chunk_size

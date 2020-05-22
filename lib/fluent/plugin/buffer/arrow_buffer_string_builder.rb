@@ -15,7 +15,7 @@ module Fluent
           record_batch.to_table.save(arrow_buf,
                                      format: @format,
                                      chunk_size: @chunk_size)
-          arrow_buf.data.to_s
+          arrow_buf.data
         end
       end
     end
