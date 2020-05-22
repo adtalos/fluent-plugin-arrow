@@ -14,6 +14,7 @@
 # limitations under the License.
 
 require "arrow"
+require "parquet"
 require 'fluent/plugin/buffer'
 require 'fluent/plugin/buffer/arrow_memory_chunk'
 
@@ -24,7 +25,8 @@ module Fluent
 
       config_param :schema, :array
       config_param :arrow_format, :enum, list: [:arrow, :parquet], default: :arrow
-      config_param :row_group_chunk_size, :integer, default: 1024
+      config_param :codec, :enum, list: [:text, :gzip, :brotli, :snappy, :lz4, :zstd], default: :text
+      config_param :row_group_chunk_size, :integer, default: 64*1024*1024
 
       attr_reader :arrow_schema
 
@@ -40,7 +42,7 @@ module Fluent
       end
 
       def generate_chunk(metadata)
-        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format)
+        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format, codec: @codec, compress: :text, log: log)
       end
     end
   end

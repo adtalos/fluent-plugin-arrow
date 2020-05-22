@@ -17,39 +17,119 @@ require 'arrow'
 require 'parquet'
 require 'fluent/msgpack_factory'
 require 'fluent/plugin/buffer/chunk'
-require 'fluent/plugin/buffer/memory_chunk'
-require 'fluent/plugin/buffer/arrow_buffer_string_builder'
 
 module Fluent
   module Plugin
     class Buffer
-      class ArrowMemoryChunk < MemoryChunk
-        include ArrowBufferStringBuilder
-
-        def initialize(metadata, schema, chunk_size: 1024, format: :arrow)
-          super(metadata, compress: :text)
+      class ArrowMemoryChunk < Chunk
+        def initialize(metadata, schema, chunk_size: 64*1024*1024, format: :arrow, codec: :text, compress: :text, log: nil)
+          super(metadata, compress: compress)
           @schema = schema
           @chunk_size = chunk_size
           @format = format
+          @codec = codec
+          @log = log
+
+          @record_batch_builder = nil
+          @chunk = nil
+
+          @chunk_bytes = 0
+          @adding_bytes = 0
+          @adding_size = 0
+          @record_batch_builder_rows = 0
+
+          reset
+        end
+
+        def concat(bulk, bulk_size)
+          @record_batch_builder.append(Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(bulk))
+          @record_batch_builder_rows += bulk_size
+
+          @adding_bytes += bulk.bytesize
+          @adding_size += bulk_size
+          true
+        end
+
+        def commit
+          @size += @adding_size
+          @chunk_bytes += @adding_bytes
+
+          @adding_bytes = @adding_size = 0
+          @modified_at = Fluent::Clock.real_now
+          @modified_at_object = nil
+          true
+        end
+
+        def rollback
+          # unsupported
+          false
+        end
+
+        def bytesize
+          @chunk_bytes + @adding_bytes
+        end
+
+        def size
+          @size + @adding_size
+        end
+
+        def empty?
+          @record_batch_builder_rows == 0 && @chunk.nil?
+        end
+
+        def purge
+          super
+          @chunk_bytes = @size = @adding_bytes = @adding_size = @record_batch_builder_rows = 0
+
+          @record_batch_builder = nil
+          @chunk = nil
+          true
         end
 
         def read(**kwargs)
-          build_arrow_buffer_string
+          ensure_chunk
+          @chunk.data
         end
 
         def open(**kwargs, &block)
-          StringIO.open(build_arrow_buffer_string, &block)
+          ensure_chunk
+          StringIO.open(@chunk.data, &block)
         end
 
         def write_to(io, **kwargs)
-          # re-implementation to optimize not to create StringIO
-          io.write build_arrow_buffer_string
+          ensure_chunk
+          io.write @chunk.data
         end
 
         private
 
-        def each_record(&block)
-          Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(@chunk, &block)
+        def reset
+          @record_batch_builder = Arrow::RecordBatchBuilder.new(@schema)
+          @record_batch_builder_rows = 0
+        end
+
+        def ensure_chunk
+          if @chunk.nil?
+            buffer = Arrow::ResizableBuffer.new(@chunk_size)
+            output_stream = Arrow::BufferOutputStream.new(buffer)
+            if @format == :parquet
+              writer_properties = Parquet::WriterProperties.new
+              if @codec != :text
+                writer_properties.set_compression(@codec)
+              end
+              writer = Parquet::ArrowFileWriter.new(@schema, output_stream, writer_properties)
+            else
+              writer = Arrow::RecordBatchFileWriter.new(output_stream, @schema)
+            end
+
+            writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
+            writer.close
+            output_stream.close
+
+            @chunk = buffer
+
+            reset
+          end
         end
       end
     end
