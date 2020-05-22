@@ -17,39 +17,102 @@ require 'arrow'
 require 'parquet'
 require 'fluent/msgpack_factory'
 require 'fluent/plugin/buffer/chunk'
-require 'fluent/plugin/buffer/memory_chunk'
-require 'fluent/plugin/buffer/arrow_buffer_string_builder'
+require 'fluent/plugin/buffer/arrow_writer'
 
 module Fluent
   module Plugin
     class Buffer
-      class ArrowMemoryChunk < MemoryChunk
-        include ArrowBufferStringBuilder
+      class ArrowMemoryChunk < Chunk
+        include ArrowWriter
 
-        def initialize(metadata, schema, chunk_size: 1024, format: :arrow)
+        def initialize(metadata, schema, chunk_size: 8192, format: :arrow, store_as: :text, log: nil)
           super(metadata, compress: :text)
           @schema = schema
           @chunk_size = chunk_size
           @format = format
+          @store_as = store_as
+          @log = log
+
+          @chunk = nil
+          @output_stream = nil
+          @writer = nil
+          @staging_chunk = nil
+
+          reset
+        end
+
+        def commit
+          @size += @adding_size
+          @writer_bytes += @adding_bytes
+
+          @adding_bytes = @adding_size = 0
+          @modified_at = Fluent::Clock.real_now
+          @modified_at_object = nil
+          true
+        end
+
+        def rollback
+          # unsupported
+          false
+        end
+
+        def bytesize
+          @writer_bytes + @adding_bytes
+        end
+
+        def size
+          @size + @adding_size
+        end
+
+        def empty?
+          @output_stream.tell == 0
+        end
+
+        def purge
+          super
+          ensure_close
+          true
         end
 
         def read(**kwargs)
-          build_arrow_buffer_string
+          ensure_stage
+          @staging_chunk.data
+        end
+
+        def staged!
+          @staging_chunk = nil
+          super
         end
 
         def open(**kwargs, &block)
-          StringIO.open(build_arrow_buffer_string, &block)
+          ensure_stage
+          StringIO.open(@staging_chunk.data, &block)
         end
 
-        def write_to(io, **kwargs)
-          # re-implementation to optimize not to create StringIO
-          io.write build_arrow_buffer_string
+        def close
+          super
+          ensure_close
         end
 
         private
 
-        def each_record(&block)
-          Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(@chunk, &block)
+        def reset
+          @chunk = Arrow::ResizableBuffer.new(@chunk_size)
+          @output_stream = Arrow::BufferOutputStream.new(@chunk)
+
+          @output_stream = init_arrow @output_stream
+
+          @writer_bytes = 0
+          @adding_bytes = 0
+          @adding_size = 0
+        end
+
+        def ensure_stage
+          if @staging_chunk.nil?
+            ensure_close
+            @staging_chunk = @chunk
+            reset
+          end
         end
       end
     end
