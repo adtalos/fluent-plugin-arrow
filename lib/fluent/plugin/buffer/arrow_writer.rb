@@ -23,7 +23,9 @@ module Fluent
             output_stream = Arrow::CompressedOutputStream.new(codec, output_stream)
           end
           if @format == :parquet
-            @writer = Parquet::ArrowFileWriter.new(@schema, output_stream)
+            @properties = Parquet::WriterProperties.new
+            @properties.set_compression(:gzip)
+            @writer = Parquet::ArrowFileWriter.new(@schema, output_stream, @properties)
           else
             @writer = Arrow::RecordBatchFileWriter.new(output_stream, @schema)
           end
