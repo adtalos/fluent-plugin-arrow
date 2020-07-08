@@ -38,6 +38,10 @@ module Fluent
           @adding_size = 0
           @record_batch_builder_rows = 0
 
+          @writer = nil
+          @buffer = nil
+          @output_stream = nil
+
           reset
         end
 
@@ -47,6 +51,12 @@ module Fluent
 
           @adding_bytes += bulk.bytesize
           @adding_size += bulk_size
+
+          if @record_batch_builder_rows >= @chunk_size
+            writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
+            reset
+          end
+
           true
         end
 
@@ -108,25 +118,35 @@ module Fluent
           @record_batch_builder_rows = 0
         end
 
-        def ensure_chunk
-          if @chunk.nil?
-            buffer = Arrow::ResizableBuffer.new(@chunk_size)
-            output_stream = Arrow::BufferOutputStream.new(buffer)
+        def writer
+          if @writer.nil?
+            @buffer = Arrow::ResizableBuffer.new(@chunk_size)
+            @output_stream = Arrow::BufferOutputStream.new(buffer)
             if @format == :parquet
               writer_properties = Parquet::WriterProperties.new
-              if @codec != :text
-                writer_properties.set_compression(@codec)
-              end
-              writer = Parquet::ArrowFileWriter.new(@schema, output_stream, writer_properties)
+              writer_properties.set_compression(@codec) if @codec != :text
+              @writer = Parquet::ArrowFileWriter.new(@schema, output_stream, writer_properties)
             else
-              writer = Arrow::RecordBatchFileWriter.new(output_stream, @schema)
+              @writer = Arrow::RecordBatchFileWriter.new(output_stream, @schema)
+            end
+          end
+          @writer
+        end
+
+        def ensure_chunk
+          return if @writer.nil?
+
+          if @chunk.nil?
+            if @record_batch_builder_rows.positive?
+              @writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
             end
 
-            writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
-            writer.close
-            output_stream.close
+            @writer.close
+            @output_stream.close
 
-            @chunk = buffer
+            @writer = nil
+
+            @chunk = @buffer
 
             reset
           end
