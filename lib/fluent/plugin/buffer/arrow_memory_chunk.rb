@@ -22,10 +22,10 @@ module Fluent
   module Plugin
     class Buffer
       class ArrowMemoryChunk < Chunk
-        def initialize(metadata, schema, chunk_size: 64*1024*1024, format: :arrow, codec: :text, compress: :text, log: nil)
+        def initialize(metadata, schema, chunk_size_per_row_group: 64*1024*1024, desired_buffer_size_in_bytes: 1<<30, format: :arrow, codec: :text, compress: :text, log: nil)
           super(metadata, compress: compress)
           @schema = schema
-          @chunk_size = chunk_size
+          @chunk_size_per_row_group = chunk_size_per_row_group
           @format = format
           @codec = codec
           @log = log
@@ -37,10 +37,17 @@ module Fluent
           @adding_bytes = 0
           @adding_size = 0
           @record_batch_builder_rows = 0
+          @total_rows = 0
 
-          @writer = nil
-          @buffer = nil
-          @output_stream = nil
+          @buffer = Arrow::ResizableBuffer.new(desired_buffer_size_in_bytes)
+          @output_stream = Arrow::BufferOutputStream.new(@buffer)
+          if @format == :parquet
+            writer_properties = Parquet::WriterProperties.new
+            writer_properties.set_compression(@codec) if @codec != :text
+            @writer = Parquet::ArrowFileWriter.new(@schema, @output_stream, writer_properties)
+          else
+            @writer = Arrow::RecordBatchFileWriter.new(@output_stream, @schema)
+          end
 
           reset
         end
@@ -48,12 +55,13 @@ module Fluent
         def concat(bulk, bulk_size)
           @record_batch_builder.append(Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(bulk))
           @record_batch_builder_rows += bulk_size
+          @total_rows += bulk_size
 
           @adding_bytes += bulk.bytesize
           @adding_size += bulk_size
 
-          if @record_batch_builder_rows >= @chunk_size
-            writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
+          if @record_batch_builder_rows >= @chunk_size_per_row_group
+            @writer.write_table(@record_batch_builder.flush.to_table, @record_batch_builder_rows)
             reset
           end
 
@@ -84,7 +92,7 @@ module Fluent
         end
 
         def empty?
-          @record_batch_builder_rows == 0 && @chunk.nil?
+          @total_rows == 0 && @chunk.nil?
         end
 
         def purge
@@ -92,6 +100,7 @@ module Fluent
           @chunk_bytes = @size = @adding_bytes = @adding_size = @record_batch_builder_rows = 0
 
           @record_batch_builder = nil
+          @total_rows = 0
           @chunk = nil
           true
         end
@@ -118,33 +127,14 @@ module Fluent
           @record_batch_builder_rows = 0
         end
 
-        def writer
-          if @writer.nil?
-            @buffer = Arrow::ResizableBuffer.new(@chunk_size)
-            @output_stream = Arrow::BufferOutputStream.new(buffer)
-            if @format == :parquet
-              writer_properties = Parquet::WriterProperties.new
-              writer_properties.set_compression(@codec) if @codec != :text
-              @writer = Parquet::ArrowFileWriter.new(@schema, output_stream, writer_properties)
-            else
-              @writer = Arrow::RecordBatchFileWriter.new(output_stream, @schema)
-            end
-          end
-          @writer
-        end
-
         def ensure_chunk
-          return if @writer.nil?
-
           if @chunk.nil?
             if @record_batch_builder_rows.positive?
-              @writer.write_table(@record_batch_builder.flush.to_table, @chunk_size)
+              @writer.write_table(@record_batch_builder.flush.to_table, @chunk_size_per_row_group)
             end
 
             @writer.close
             @output_stream.close
-
-            @writer = nil
 
             @chunk = @buffer
 
