@@ -26,8 +26,7 @@ module Fluent
       config_param :schema, :array
       config_param :arrow_format, :enum, list: [:arrow, :parquet], default: :arrow
       config_param :codec, :enum, list: [:text, :gzip, :brotli, :snappy, :lz4, :zstd], default: :text
-      config_param :chunk_size_per_row_group, :integer, default: 64*1024*1024
-      config_param :desired_buffer_size_in_bytes, :integer, default: 1<<30
+      config_param :row_group_chunk_size, :integer, default: 64*1024*1024
 
       attr_reader :arrow_schema
 
@@ -43,8 +42,7 @@ module Fluent
       end
 
       def generate_chunk(metadata)
-        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size_per_row_group: @chunk_size_per_row_group, desired_buffer_size_in_bytes: @desired_buffer_size_in_bytes, format: @arrow_format, codec: @codec, compress: :text, log: log)
-        
+        Fluent::Plugin::Buffer::ArrowMemoryChunk.new(metadata, @arrow_schema, chunk_size: @row_group_chunk_size, format: @arrow_format, codec: @codec, compress: :text, log: log)
       end
     end
   end
