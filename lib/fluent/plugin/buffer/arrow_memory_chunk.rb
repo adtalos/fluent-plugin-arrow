@@ -42,7 +42,7 @@ module Fluent
         end
 
         def concat(bulk, bulk_size)
-          @record_batch_builder.append(Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(bulk))
+          @record_batch_builder.append(Fluent::MessagePackFactory.engine_factory.unpacker.feed_each(bulk).filter { |value| value.is_a? Hash })
           @record_batch_builder_rows += bulk_size
 
           @adding_bytes += bulk.bytesize
